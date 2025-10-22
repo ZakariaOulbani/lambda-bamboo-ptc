@@ -1,0 +1,10 @@
+# Lambda dependencies
+pydantic==2.5.0
+requests==2.31.0
+
+# AWS SDK (déjà disponible dans Lambda, mais utile pour dev local)
+boto3==1.34.0
+
+# Pour les tests
+pytest==7.4.3
+pytest-mock==3.12.0

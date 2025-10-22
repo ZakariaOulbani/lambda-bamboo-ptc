@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Lambda Bamboo-PTC Integration
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: python3.12
+    Environment:
+      Variables:
+        LOG_LEVEL: INFO
+
+Resources:
+  BambooPTCFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: bamboo-ptc-connector
+      CodeUri: .
+      Handler: src.handler.lambda_handler
+      Events:
+        GetLocations:
+          Type: Api
+          Properties:
+            Path: /locations
+            Method: get
+        GetLocationById:
+          Type: Api
+          Properties:
+            Path: /locations/{location_id}
+            Method: get
+        GetMeasures:
+          Type: Api
+          Properties:
+            Path: /locations/{location_id}/measures
+            Method: get
+        PostActivations:
+          Type: Api
+          Properties:
+            Path: /activations
+            Method: post
+        GetActivations:
+          Type: Api
+          Properties:
+            Path: /activations
+            Method: get
+
+Outputs:
+  ApiUrl:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  FunctionArn:
+    Description: "Lambda Function ARN"
+    Value: !GetAtt BambooPTCFunction.Arn

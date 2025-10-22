@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: bamboo-localstack
+    ports:
+      - "4566:4566"
+      - "4510-4559:4510-4559"
+    environment:
+      - SERVICES=lambda,cloudwatch,sts,iam
+      - DEBUG=1
+      - LAMBDA_EXECUTOR=docker
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - LAMBDA_REMOTE_DOCKER=0
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./:/app"
+    networks:
+      - bamboo-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  dev:
+    build: .
+    container_name: bamboo-dev
+    working_dir: /app
+    volumes:
+      - "./:/app"
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=eu-west-1
+      - LOCALSTACK_ENDPOINT=http://localstack:4566
+    networks:
+      - bamboo-network
+    depends_on:
+      localstack:
+        condition: service_healthy
+    command: tail -f /dev/null
+
+networks:
+  bamboo-network:
+    driver: bridge
