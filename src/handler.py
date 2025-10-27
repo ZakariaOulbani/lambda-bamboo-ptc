@@ -9,7 +9,7 @@ from typing import Dict, Any
 
 from .endpoints.locations import get_all_locations, get_location_by_id
 from .endpoints.measures import get_measures_by_location
-from .endpoints.activations import send_activation, get_all_activations
+from .endpoints.activations import send_activation, get_all_activations, set_property
 from .models import (
     HierarchicalActivationModel,
     ErrorModel,
@@ -48,7 +48,7 @@ def create_response(status_code: int, body: Any) -> Dict[str, Any]:
         'headers': {
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*',  # CORS
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type, Authorization'
         },
         'body': json.dumps(body_json)
@@ -194,6 +194,67 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
             result = get_all_activations(activation_status, location_id, asset_id, circuit_id)
             return create_response(200, result)
+
+        # PUT /locations/{thing_id}/properties/{property_name}
+        # Route pour modifier une propriété d'un équipement (Thing SetProperty de Postman)
+        elif '/properties/' in path and http_method == 'PUT':
+            # Récupérer thing_id et property_name depuis les path params
+            # URL format: /locations/{thing_id}/properties/{property_name}
+            thing_id = path_params.get('thing_id')
+            property_name = path_params.get('property_name')
+
+            # Vérifier que les deux sont bien présents
+            if not thing_id or not property_name:
+                return create_error_response(
+                    400,
+                    "Missing thing_id or property_name parameter",
+                    [ErrorDetail(field="path", error="thing_id and property_name are required")]
+                )
+
+            # Vérifier qu'il y a un body
+            if not body:
+                return create_error_response(
+                    400,
+                    "Missing request body"
+                )
+
+            try:
+                # Parser le JSON du body
+                body_data = json.loads(body)
+                value = body_data.get('value')
+
+                # La valeur est obligatoire dans le body
+                if value is None:
+                    return create_error_response(
+                        400,
+                        "Missing 'value' in request body",
+                        [ErrorDetail(field="value", error="Required field")]
+                    )
+
+                # Appeler la fonction set_property pour faire le boulot
+                result = set_property(thing_id, property_name, value)
+                return create_response(200, result)
+
+            except json.JSONDecodeError:
+                # JSON mal formé
+                return create_error_response(
+                    400,
+                    "Invalid JSON in request body"
+                )
+            except ValueError as e:
+                # Erreur de validation (ex: propriété non autorisée)
+                return create_error_response(
+                    400,
+                    str(e)
+                )
+            except Exception as e:
+                # Erreur inattendue
+                logger.error(f"Error setting property: {str(e)}")
+                return create_error_response(
+                    500,
+                    "Error setting property",
+                    [ErrorDetail(field="general", error=str(e))]
+                )
 
         # Route non trouvée
         else:

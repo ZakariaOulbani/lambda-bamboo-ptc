@@ -3,7 +3,9 @@ Tests unitaires pour activations.py - VERSION ACTUELLE (avec données mockées)
 """
 
 import pytest
-from src.endpoints.activations import send_activation, get_all_activations
+import os
+from unittest.mock import patch
+from src.endpoints.activations import send_activation, get_all_activations, set_property
 from src.models import (
     HierarchicalActivationModel,
     LocationsActivationModel,
@@ -251,3 +253,87 @@ class TestGetAllActivations:
     # def test_model_is_json_serializable(self):
     #     """Test que les activations peuvent être sérialisées en JSON"""
     #     pass
+
+
+class TestSetProperty:
+    """Tests pour set_property (modification de propriétés)"""
+
+    def test_set_property_returns_success_in_mock_mode(self):
+        """
+        Test que set_property retourne un succès en mode mock
+        """
+        # Arrange
+        with patch.dict(os.environ, {'USE_MOCK': 'true'}):
+            # Act
+            result = set_property('LOC_0001', 'power', 10)
+
+            # Assert
+            assert result['success'] is True
+            assert result['thing_id'] == 'LOC_0001'
+            assert result['property_name'] == 'power'
+            assert result['value'] == 10
+
+    def test_set_property_accepts_valid_properties(self):
+        """
+        Test que set_property accepte toutes les propriétés autorisées
+        """
+        # Arrange
+        valid_properties = ['power', 'tempsp', 'status', 'operation_mode']
+
+        with patch.dict(os.environ, {'USE_MOCK': 'true'}):
+            for prop in valid_properties:
+                # Act
+                result = set_property('LOC_0001', prop, 100)
+
+                # Assert
+                assert result['success'] is True
+                assert result['property_name'] == prop
+
+    def test_set_property_rejects_invalid_property(self):
+        """
+        Test que set_property rejette les propriétés non autorisées
+        """
+        # Arrange
+        with patch.dict(os.environ, {'USE_MOCK': 'true'}):
+            # Act & Assert
+            with pytest.raises(ValueError) as exc_info:
+                set_property('LOC_0001', 'invalid_property', 10)
+
+            assert 'not allowed' in str(exc_info.value)
+
+    def test_set_property_handles_different_value_types(self):
+        """
+        Test que set_property accepte différents types de valeurs
+        """
+        # Arrange
+        with patch.dict(os.environ, {'USE_MOCK': 'true'}):
+            # Act - nombre entier
+            result_int = set_property('LOC_0001', 'power', 10)
+            # Act - nombre décimal
+            result_float = set_property('LOC_0001', 'tempsp', 7.5)
+            # Act - chaîne
+            result_string = set_property('LOC_0001', 'operation_mode', 'EXTERNAL')
+
+            # Assert
+            assert result_int['value'] == 10
+            assert result_float['value'] == 7.5
+            assert result_string['value'] == 'EXTERNAL'
+
+    @patch('src.endpoints.activations.set_ptc_property')
+    def test_set_property_calls_ptc_in_real_mode(self, mock_ptc):
+        """
+        Test que set_property appelle l'API PTC en mode réel
+        """
+        # Arrange
+        mock_ptc.return_value = {
+            'success': True,
+            'message': 'Property set'
+        }
+
+        with patch.dict(os.environ, {'USE_MOCK': 'false', 'PTC_API_URL': 'https://test.com', 'PTC_API_KEY': 'test-key'}):
+            # Act
+            result = set_property('LOC_0001', 'power', 20)
+
+            # Assert
+            mock_ptc.assert_called_once_with('LOC_0001', 'power', 20)
+            assert result['success'] is True

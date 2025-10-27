@@ -1,14 +1,30 @@
 """
 Endpoints pour les activations
-- POST /activations
-- GET /activations
+
+Endpoints disponibles:
+- POST /activations : Envoyer des activations vers PTC
+- GET /activations : Récupérer la liste des activations
+- PUT /locations/{location_id}/properties/{property_name} : Modifier une propriété
+
+TODO: Intégrer les activations avec l'API PTC réelle (actuellement en mock)
 """
 
+import os
+from dotenv import load_dotenv
 from ..models import (
     HierarchicalActivationModel,
     ActivationResponseModel,
     ActivationsListModel
 )
+from ..ptc_client import set_ptc_property
+
+load_dotenv()
+
+
+def _use_mock():
+    """Vérifie si on utilise les mocks ou l'API PTC réelle"""
+    use_mock = os.getenv('USE_MOCK', 'true').lower()
+    return use_mock in ('true', '1', 'yes')
 
 
 def send_activation(activation_data: HierarchicalActivationModel) -> list[ActivationResponseModel]:
@@ -133,3 +149,57 @@ def get_all_activations(
         ]
 
     return filtered_activations
+
+
+def set_property(thing_id: str, property_name: str, value) -> dict:
+    """
+    PUT /locations/{thing_id}/properties/{property_name}
+    Permet de modifier une propriété d'un équipement dans PTC
+
+    Params:
+        thing_id: ID du Thing PTC (location, asset, ou circuit)
+        property_name: Nom de la propriété à changer
+        value: Nouvelle valeur à appliquer
+
+    Returns:
+        dict: statut de l'opération
+    """
+    # Whitelist des propriétés qu'on autorise à modifier
+    # Important pour la sécurité, on ne veut pas qu'on puisse tout modifier
+    ALLOWED_PROPERTIES = [
+        'power',        # puissance
+        'tempsp',       # temperature setpoint
+        'deltatempsp',  # delta temperature setpoint
+        'status',       # statut on/off
+        'operation_mode',  # mode de fonctionnement
+        'availability', # disponibilité
+        'humidity',     # humidité
+        'temp',         # température
+        'quality'       # qualité
+    ]
+
+    # Vérifier que la propriété demandée est dans la liste autorisée
+    if property_name not in ALLOWED_PROPERTIES:
+        raise ValueError(
+            f"Property '{property_name}' is not allowed. "
+            f"Allowed properties: {', '.join(ALLOWED_PROPERTIES)}"
+        )
+
+    # En mode mock, on simule juste la réponse
+    if _use_mock():
+        return {
+            "success": True,
+            "message": f"[MOCK] Property {property_name} of {thing_id} set to {value}",
+            "thing_id": thing_id,
+            "property_name": property_name,
+            "value": value
+        }
+
+    # En mode réel, on appelle vraiment l'API PTC
+    result = set_ptc_property(thing_id, property_name, value)
+    # Enrichir la réponse avec les infos de la requête
+    result["thing_id"] = thing_id
+    result["property_name"] = property_name
+    result["value"] = value
+
+    return result

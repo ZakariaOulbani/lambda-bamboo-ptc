@@ -4,7 +4,9 @@ Endpoints pour les locations
 - GET /locations/{location_id}
 """
 
+import os
 from datetime import datetime, timezone
+from dotenv import load_dotenv
 from ..models import (
     LocationsListModel,
     LocationHierarchyModel,
@@ -19,6 +21,16 @@ from ..models import (
     ErrorInfo,
     ErrorDetail
 )
+from ..ptc_client import call_ptc_service
+from ..ptc_transformer import transform_get_all_locations, transform_get_location_by_id
+
+load_dotenv()
+
+
+def _use_mock():
+    """Vérifie si on utilise les mocks ou l'API PTC réelle"""
+    use_mock = os.getenv('USE_MOCK', 'true').lower()
+    return use_mock in ('true', '1', 'yes')
 
 
 def create_mock_measure(value: float) -> MeasureModel:
@@ -42,11 +54,17 @@ def create_mock_operation_mode(mode: str) -> MeasureTextModel:
 def get_all_locations() -> LocationsListModel:
     """
     GET /locations
-    Retourne toutes les locations avec leur hiérarchie
-
-    TODO: Récupérer depuis PTC
+    Retourne la liste de toutes les locations avec leur hiérarchie complète
+    (locations -> assets -> circuits)
     """
-    # Pour l'instant, retourner des données mockées
+    # Vérifier si on doit utiliser l'API PTC réelle ou les mocks
+    if not _use_mock():
+        # Appeler l'endpoint GetAllLocations de PTC
+        ptc_data = call_ptc_service('GetAllLocations')
+        # Transformer les données PTC vers notre format
+        return transform_get_all_locations(ptc_data)
+
+    # Mode mock: retourner des données de test pour le dev
     mock_locations = LocationsListModel(
         locations=[
             LocationHierarchyModel(
@@ -91,16 +109,36 @@ def get_location_by_id(
 ) -> LocationModel:
     """
     GET /locations/{location_id}
-    Retourne les données temps réel d'une location
+    Récupère les données temps réel d'une location (power, temp, humidity, etc.)
 
-    Paramètres:
-        location_id: ID de la location
-        asset_id: (optionnel) Filtrer sur un asset spécifique
-        circuit_id: (optionnel) Filtrer sur un circuit spécifique
-
-    TODO: Récupérer depuis PTC et appliquer les filtres
+    Params:
+        location_id: ID de la location à récupérer
+        asset_id: (optionnel) Filtrer pour ne retourner qu'un asset
+        circuit_id: (optionnel) Filtrer pour ne retourner qu'un circuit
     """
-    # Vérifier que la location existe (mock)
+    # Mode réel: appeler PTC
+    if not _use_mock():
+        # Appeler GetLocationById avec les bons paramètres
+        ptc_data = call_ptc_service('GetLocationById', {
+            'location_name': location_id,
+            'asset_name': asset_id or '',  # Envoyer string vide si None
+            'circuit_name': circuit_id or ''
+        })
+        # Transformer la réponse
+        location = transform_get_location_by_id(ptc_data)
+
+        # Si on a demandé un asset spécifique, filtrer
+        if asset_id:
+            location.assets = [a for a in location.assets if a.id == asset_id]
+
+        # Pareil pour les circuits
+        if circuit_id and location.assets:
+            for asset in location.assets:
+                asset.circuits = [c for c in asset.circuits if c.id == circuit_id]
+
+        return location
+
+    # Mode mock - vérifier que la location existe dans nos mocks
     if location_id != "icepark-001":
         raise ValueError(f"Location {location_id} not found")
 

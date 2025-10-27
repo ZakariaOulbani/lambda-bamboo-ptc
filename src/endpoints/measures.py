@@ -3,7 +3,9 @@ Endpoint pour les mesures historiques
 - GET /locations/{location_id}/measures
 """
 
+import os
 from datetime import datetime, timezone, timedelta
+from dotenv import load_dotenv
 from ..models import (
     LocationHistoryModel,
     AssetHistoryModel,
@@ -11,6 +13,16 @@ from ..models import (
     MeasureModel,
     MeasureTextModel
 )
+from ..ptc_client import call_ptc_service
+from ..ptc_transformer import transform_get_location_property_history
+
+load_dotenv()
+
+
+def _use_mock():
+    """Vérifie si on utilise les mocks ou l'API PTC réelle"""
+    use_mock = os.getenv('USE_MOCK', 'true').lower()
+    return use_mock in ('true', '1', 'yes')
 
 
 def create_mock_measure_series(base_value: float, count: int = 3) -> list[MeasureModel]:
@@ -32,25 +44,62 @@ def get_measures_by_location(
     location_id: str,
     asset_id: str = None,
     circuit_id: str = None,
-    from_seconds: int = 900,  # 15 minutes par défaut
+    from_seconds: int = 900,  # Par défaut 15 minutes
     to_time: str = None,
-    frequency_seconds: int = 300  # 5 minutes par défaut
+    frequency_seconds: int = 300  # Par défaut 5 minutes
 ) -> LocationHistoryModel:
     """
     GET /locations/{location_id}/measures
-    Retourne les données historiques d'une location
+    Récupère l'historique des mesures pour une location
 
-    Paramètres:
+    Params:
         location_id: ID de la location
-        asset_id: (optionnel) Filtrer sur un asset
-        circuit_id: (optionnel) Filtrer sur un circuit
-        from_seconds: Nombre de secondes depuis maintenant
-        to_time: Date/heure de fin (ISO string)
-        frequency_seconds: Intervalle entre les mesures
-
-    TODO: Récupérer depuis PTC avec les bons paramètres de temps
+        asset_id: (optionnel) Filtrer sur un asset spécifique
+        circuit_id: (optionnel) Filtrer sur un circuit spécifique
+        from_seconds: Nombre de secondes en arrière depuis maintenant (défaut: 900 = 15min)
+        to_time: Date/heure de fin au format ISO (si None, utilise maintenant)
+        frequency_seconds: Intervalle entre les points de données (défaut: 300 = 5min)
     """
-    # Vérifier que la location existe (mock)
+    # Mode réel: appeler PTC
+    if not _use_mock():
+        now = datetime.now(timezone.utc)
+
+        # Calculer la date de fin
+        if to_time:
+            # Parser la date ISO fournie
+            to_dt = datetime.fromisoformat(to_time.replace('Z', '+00:00'))
+        else:
+            # Sinon utiliser maintenant
+            to_dt = now
+
+        # Calculer la date de début en soustrayant from_seconds
+        from_dt = to_dt - timedelta(seconds=from_seconds)
+
+        # Convertir en format ISO que PTC attend (avec Z à la fin)
+        from_iso = from_dt.isoformat().replace('+00:00', 'Z')
+        to_iso = to_dt.isoformat().replace('+00:00', 'Z')
+
+        ptc_data = call_ptc_service('GetLocationPropertyHistory', {
+            'location_name': location_id,
+            'asset_name': asset_id or '',
+            'circuit_name': circuit_id or '',
+            'from': from_iso,
+            'to': to_iso
+        })
+
+        history = transform_get_location_property_history(ptc_data)
+
+        # Appliquer les filtres
+        if asset_id:
+            history.assets = [a for a in history.assets if a.id == asset_id]
+
+        if circuit_id and history.assets:
+            for asset in history.assets:
+                asset.circuits = [c for c in asset.circuits if c.id == circuit_id]
+
+        return history
+
+    # Mode mock - vérifier que la location existe
     if location_id != "icepark-001":
         raise ValueError(f"Location {location_id} not found")
 

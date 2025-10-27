@@ -20,7 +20,7 @@ class TestLambdaHandlerRouting:
         Test que GET /locations appelle get_all_locations
         """
         # Arrange
-        mock_result = MagicMock(spec=LocationsListModel)
+        mock_result = MagicMock()
         mock_result.model_dump.return_value = {'locations': []}
         mock_get_all_locations.return_value = mock_result
 
@@ -45,7 +45,7 @@ class TestLambdaHandlerRouting:
         Test que GET /locations/{id} appelle get_location_by_id avec le bon ID
         """
         # Arrange
-        mock_result = MagicMock(spec=LocationModel)
+        mock_result = MagicMock()
         mock_result.model_dump.return_value = {'id': 'icepark-001'}
         mock_get_location_by_id.return_value = mock_result
 
@@ -222,3 +222,113 @@ class TestResponseHelpers:
         assert 'error' in body
         assert body['error']['code'] == 404
         assert body['error']['message'] == "Not found"
+
+
+class TestPutSetProperty:
+    """Tests pour la route PUT /locations/{thing_id}/properties/{property_name}"""
+
+    @patch('src.handler.set_property')
+    def test_routes_to_set_property(self, mock_set_property):
+        """
+        Test que PUT /locations/{id}/properties/{prop} appelle set_property
+        """
+        # Arrange
+        mock_set_property.return_value = {
+            'success': True,
+            'thing_id': 'LOC_0001',
+            'property_name': 'power',
+            'value': 10
+        }
+
+        event = {
+            'httpMethod': 'PUT',
+            'path': '/locations/LOC_0001/properties/power',
+            'queryStringParameters': None,
+            'pathParameters': {
+                'thing_id': 'LOC_0001',
+                'property_name': 'power'
+            },
+            'body': json.dumps({'value': 10})
+        }
+
+        # Act
+        response = lambda_handler(event, None)
+
+        # Assert
+        assert response['statusCode'] == 200
+        mock_set_property.assert_called_once_with('LOC_0001', 'power', 10)
+
+    def test_returns_400_when_missing_thing_id(self):
+        """
+        Test que PUT retourne 400 si thing_id est manquant
+        """
+        # Arrange
+        event = {
+            'httpMethod': 'PUT',
+            'path': '/locations//properties/power',
+            'queryStringParameters': None,
+            'pathParameters': {
+                'property_name': 'power'
+            },
+            'body': json.dumps({'value': 10})
+        }
+
+        # Act
+        response = lambda_handler(event, None)
+
+        # Assert
+        assert response['statusCode'] == 400
+        body = json.loads(response['body'])
+        assert 'error' in body
+
+    def test_returns_400_when_missing_value_in_body(self):
+        """
+        Test que PUT retourne 400 si value est manquant dans le body
+        """
+        # Arrange
+        event = {
+            'httpMethod': 'PUT',
+            'path': '/locations/LOC_0001/properties/power',
+            'queryStringParameters': None,
+            'pathParameters': {
+                'thing_id': 'LOC_0001',
+                'property_name': 'power'
+            },
+            'body': json.dumps({})  # Pas de 'value'
+        }
+
+        # Act
+        response = lambda_handler(event, None)
+
+        # Assert
+        assert response['statusCode'] == 400
+        body = json.loads(response['body'])
+        assert 'error' in body
+        assert 'value' in body['error']['message'].lower()
+
+    @patch('src.handler.set_property')
+    def test_returns_400_for_invalid_property(self, mock_set_property):
+        """
+        Test que PUT retourne 400 pour une propriété non autorisée
+        """
+        # Arrange
+        mock_set_property.side_effect = ValueError("Property 'bad_prop' is not allowed")
+
+        event = {
+            'httpMethod': 'PUT',
+            'path': '/locations/LOC_0001/properties/bad_prop',
+            'queryStringParameters': None,
+            'pathParameters': {
+                'thing_id': 'LOC_0001',
+                'property_name': 'bad_prop'
+            },
+            'body': json.dumps({'value': 10})
+        }
+
+        # Act
+        response = lambda_handler(event, None)
+
+        # Assert
+        assert response['statusCode'] == 400
+        body = json.loads(response['body'])
+        assert 'error' in body
