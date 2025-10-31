@@ -25,22 +25,22 @@ def test_get_token():
     print("=" * 70)
 
     try:
-        print("📡 Appel à l'API OAuth2 ENGIE...")
-        print(f"   Client ID: {os.getenv('ENGIE_CLIENT_ID', 'NON CONFIGURÉ')}")
+        print("[INFO] Appel a l'API OAuth2 ENGIE...")
+        print(f"   Client ID: {os.getenv('ENGIE_CLIENT_ID', 'NON CONFIGURE')}")
         print(f"   Environment: {os.getenv('ENVIRONMENT', 'dev')}")
         print()
 
         token = get_jwt_token()
 
-        print("✅ Token JWT obtenu avec succès!")
+        print("[OK] Token JWT obtenu avec succes!")
         print(f"   Token: {token[:50]}..." if len(token) > 50 else f"   Token: {token}")
         print()
         return token
 
     except AuthenticationError as e:
-        print(f"❌ Erreur d'authentification: {e}")
+        print(f"[ERREUR] Erreur d'authentification: {e}")
         print()
-        print("⚠️  Vérifiez que les variables d'environnement sont configurées:")
+        print("[ATTENTION] Verifiez que les variables d'environnement sont configurees:")
         print("   - ENGIE_CLIENT_ID")
         print("   - ENGIE_CLIENT_SECRET")
         print()
@@ -54,11 +54,11 @@ def test_validate_token(token):
     print("=" * 70)
 
     if not token:
-        print("⏩ Test ignoré (pas de token disponible)")
+        print("[SKIP] Test ignore (pas de token disponible)")
         print()
         return
 
-    # Créer un event simulé avec le token
+    # Creer un event simule avec le token
     event = {
         'headers': {
             'Authorization': f'Bearer {token}'
@@ -66,16 +66,16 @@ def test_validate_token(token):
     }
 
     try:
-        print("🔍 Validation du token...")
+        print("[INFO] Validation du token...")
         result = validate_jwt_token(event)
 
-        print("✅ Token validé avec succès!")
+        print("[OK] Token valide avec succes!")
         print(f"   Valid: {result['valid']}")
         print(f"   Validated at: {result['validated_at']}")
         print()
 
     except TokenValidationError as e:
-        print(f"❌ Erreur de validation: {e}")
+        print(f"[ERREUR] Erreur de validation: {e}")
         print()
 
 
@@ -92,13 +92,13 @@ def test_invalid_token():
     }
 
     try:
-        print("🔍 Validation d'un token invalide...")
+        print("[INFO] Validation d'un token invalide...")
         validate_jwt_token(event)
-        print("❌ Le token aurait dû être rejeté!")
+        print("[ERREUR] Le token aurait du etre rejete!")
         print()
 
     except TokenValidationError as e:
-        print(f"✅ Token invalide correctement rejeté")
+        print(f"[OK] Token invalide correctement rejete")
         print(f"   Erreur: {e}")
         print()
 
@@ -114,13 +114,13 @@ def test_missing_token():
     }
 
     try:
-        print("🔍 Validation sans token...")
+        print("[INFO] Validation sans token...")
         validate_jwt_token(event)
-        print("❌ L'absence de token aurait dû être détectée!")
+        print("[ERREUR] L'absence de token aurait du etre detectee!")
         print()
 
     except TokenValidationError as e:
-        print(f"✅ Absence de token correctement détectée")
+        print(f"[OK] Absence de token correctement detectee")
         print(f"   Erreur: {e}")
         print()
 
@@ -134,9 +134,9 @@ def test_full_integration():
     try:
         # Obtenir un vrai token
         token = get_jwt_token()
-        print(f"✅ Token obtenu: {token[:30]}...")
+        print(f"[OK] Token obtenu: {token[:30]}...")
 
-        # Créer un event complet
+        # Creer un event complet
         event = {
             'httpMethod': 'GET',
             'path': '/locations',
@@ -151,37 +151,37 @@ def test_full_integration():
         # Importer et appeler le handler
         from src.handler import lambda_handler
 
-        print("📡 Appel du handler Lambda avec authentification...")
+        print("[INFO] Appel du handler Lambda avec authentification...")
         response = lambda_handler(event, None)
 
-        print(f"✅ Réponse reçue: {response['statusCode']}")
+        print(f"[OK] Reponse recue: {response['statusCode']}")
 
         if response['statusCode'] == 200:
-            print("✅ Authentification JWT fonctionne correctement!")
+            print("[OK] Authentification JWT fonctionne correctement!")
         else:
-            print(f"⚠️  Code de réponse inattendu: {response['statusCode']}")
+            print(f"[ATTENTION] Code de reponse inattendu: {response['statusCode']}")
             print(f"   Body: {response['body'][:200]}...")
 
         print()
 
     except Exception as e:
-        print(f"❌ Erreur lors du test d'intégration: {e}")
+        print(f"[ERREUR] Erreur lors du test d'integration: {e}")
         print()
 
 
 def main():
     """Fonction principale"""
     print("\n")
-    print("🔐 TEST D'AUTHENTIFICATION JWT - BAMBOO-PTC")
+    print("TEST D'AUTHENTIFICATION JWT - BAMBOO-PTC")
     print("=" * 70)
     print()
 
-    # Vérifier la configuration
+    # Verifier la configuration
     client_id = os.getenv('ENGIE_CLIENT_ID')
     client_secret = os.getenv('ENGIE_CLIENT_SECRET')
 
     if not client_id or not client_secret or client_id == 'your_client_id_here':
-        print("⚠️  ATTENTION: Les credentials ENGIE ne sont pas configurés!")
+        print("[ATTENTION] Les credentials ENGIE ne sont pas configures!")
         print()
         print("Pour tester avec de vrais credentials:")
         print("1. Ouvrez le fichier .env")
@@ -189,30 +189,30 @@ def main():
         print("   ENGIE_CLIENT_ID=votre_vrai_client_id")
         print("   ENGIE_CLIENT_SECRET=votre_vrai_client_secret")
         print()
-        print("Les tests vont s'exécuter mais échoueront à l'obtention du token.")
+        print("Les tests vont s'executer mais echoueront a l'obtention du token.")
         print()
-        input("Appuyez sur Entrée pour continuer...")
+        input("Appuyez sur Entree pour continuer...")
         print()
 
-    # Exécuter les tests
+    # Executer les tests
     token = test_get_token()
     test_validate_token(token)
     test_invalid_token()
     test_missing_token()
 
-    # Test d'intégration si on a un token
+    # Test d'integration si on a un token
     if token:
         test_full_integration()
 
-    # Résumé
+    # Resume
     print("=" * 70)
-    print("✅ TESTS TERMINÉS")
+    print("[OK] TESTS TERMINES")
     print("=" * 70)
     print()
-    print("📋 Prochaines étapes:")
+    print("Prochaines etapes:")
     print("   1. Configurez les vrais credentials ENGIE dans .env")
     print("   2. Testez avec: python3 test_jwt_auth.py")
-    print("   3. Déployez avec: ./deploy-local.sh")
+    print("   3. Deployez avec: ./deploy-local.sh")
     print()
 
 
