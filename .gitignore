@@ -43,3 +43,10 @@ package/
 response.json
 payload.json
 TESTS_SUMMARY.md
+
+# Documentation privée / guides internes (ne pas partager avec l'équipe)
+DEPLOIEMENT_AWS.md
+ONEDRIVE_BACKUP_GUIDE.md
+GIT_PRIVACY_GUIDE.md
+PARTAGE_GITHUB.md
+COMMANDES_GIT.sh

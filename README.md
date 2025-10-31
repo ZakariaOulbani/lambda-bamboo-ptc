@@ -182,10 +182,82 @@ Le déploiement AWS sera géré par l'équipe DevOps avec le template SAM fourni
 ## Configuration
 
 Variables d'environnement à configurer en production:
+
+### API PTC ThingWorx
 - `PTC_API_URL` - URL de l'API PTC ThingWorx
 - `PTC_API_KEY` - Clé d'API PTC (à garder secrète)
 - `USE_MOCK` - Mode mock (true) ou réel (false)
+
+### Authentification JWT (Document v1.4 pages 30-32)
+- `ENGIE_CLIENT_ID` - Client ID OAuth2 ENGIE (fourni par email)
+- `ENGIE_CLIENT_SECRET` - Client Secret OAuth2 ENGIE (à garder secret!)
+- `ENVIRONMENT` - Environnement (dev ou prod)
+- `JWT_AUTHENTICATION_ENABLED` - Activer/désactiver JWT (true/false)
+
+### Autres
 - `LOG_LEVEL` - Niveau de log (INFO, DEBUG)
+
+## Authentification JWT
+
+L'API utilise l'authentification JWT conforme au **document v1.4 (pages 30-32)**.
+
+### Configuration des Credentials
+
+1. **Obtenir les credentials ENGIE** (fournis par email):
+   - `client_id`
+   - `client_secret`
+
+2. **Configurer dans .env**:
+```bash
+ENGIE_CLIENT_ID=votre_client_id_ici
+ENGIE_CLIENT_SECRET=votre_client_secret_ici
+ENVIRONMENT=dev  # ou prod
+JWT_AUTHENTICATION_ENABLED=true
+```
+
+### Obtenir un Token JWT
+
+Pour tester l'authentification:
+```bash
+python3 test_jwt_auth.py
+```
+
+Ou manuellement avec curl:
+```bash
+# Obtenir un token (DEV)
+curl --location 'https://apis-int1.svc.engie-solutions.fr/oauth2/b2b/v1/token' \
+  --header 'Content-Type: application/x-www-form-urlencoded' \
+  --data-urlencode 'client_id=votre_client_id' \
+  --data-urlencode 'client_secret=votre_client_secret' \
+  --data-urlencode 'grant_type=client_credentials' \
+  --data-urlencode 'scope=apis'
+
+# Réponse:
+# {
+#   "token_type": "Bearer",
+#   "expires_in": 3600,
+#   "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+# }
+```
+
+### Utiliser le Token JWT
+
+Tous les endpoints nécessitent le header `Authorization`:
+
+```bash
+curl -X GET http://localhost:4566/restapis/.../locations \
+  -H "Authorization: Bearer votre_token_jwt_ici"
+```
+
+### Désactiver JWT (Développement uniquement)
+
+Pour tester sans authentification:
+```bash
+# Dans .env
+JWT_AUTHENTICATION_ENABLED=false
+```
+
+**ATTENTION**: Ne JAMAIS désactiver JWT en production!
 
 ## Intégration PTC
 

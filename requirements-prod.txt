@@ -1,0 +1,10 @@
+# Lambda dependencies - PRODUCTION ONLY
+# Ce fichier contient uniquement les dépendances nécessaires pour AWS Lambda
+# N'inclut PAS pytest et autres outils de test
+
+pydantic==2.5.0
+requests==2.31.0
+python-dotenv==1.0.0
+
+# Note: boto3 est déjà disponible dans l'environnement AWS Lambda
+# Pas besoin de l'inclure dans le déploiement

@@ -1,8 +1,14 @@
 """
 Handler principal de la Lambda
 Route les requêtes API Gateway vers les bons endpoints
+
+Authentification JWT conforme au document v1.4 (pages 30-32):
+- Tous les endpoints nécessitent un token JWT valide
+- Header requis: Authorization: Bearer <token>
+- Token obtenu via ENGIE OAuth2 API
 """
 
+import os
 import json
 import logging
 from typing import Dict, Any
@@ -10,6 +16,7 @@ from typing import Dict, Any
 from .endpoints.locations import get_all_locations, get_location_by_id
 from .endpoints.measures import get_measures_by_location
 from .endpoints.activations import send_activation, get_all_activations, set_property
+from .auth import validate_jwt_token, TokenValidationError
 from .models import (
     HierarchicalActivationModel,
     ErrorModel,
@@ -80,7 +87,11 @@ def create_error_response(status_code: int, message: str, details: list = None) 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
-    Point d'entrée de la Lambda
+    Point d'entrée de la Lambda avec authentification JWT
+
+    Conforme au document v1.4 (pages 30-32):
+    - Valide le token JWT pour toutes les requêtes (sauf OPTIONS pour CORS)
+    - Retourne 401 Unauthorized si le token est invalide ou manquant
 
     Args:
         event: Événement API Gateway contenant la requête HTTP
@@ -90,8 +101,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         Réponse formatée pour API Gateway
     """
     try:
-        # Logger l'événement reçu
-        logger.info(f"Received event: {json.dumps(event)}")
+        # Logger l'événement reçu (sans les headers sensibles)
+        safe_event = {k: v for k, v in event.items() if k != 'headers'}
+        logger.info(f"Received event: {json.dumps(safe_event)}")
 
         # Extraire les informations de la requête
         http_method = event.get('httpMethod', 'GET')
@@ -101,6 +113,63 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         body = event.get('body')
 
         logger.info(f"{http_method} {path}")
+
+        # Gérer les requêtes OPTIONS pour CORS (pas d'auth requise)
+        if http_method == 'OPTIONS':
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+                },
+                'body': ''
+            }
+
+        # =====================================================================
+        # AUTHENTIFICATION JWT (Document v1.4 pages 30-32)
+        # =====================================================================
+        # Vérifier si l'authentification JWT est activée
+        jwt_enabled = os.getenv('JWT_AUTHENTICATION_ENABLED', 'true').lower() in ('true', '1', 'yes')
+
+        if jwt_enabled:
+            try:
+                # Valider le token JWT
+                token_info = validate_jwt_token(event)
+                logger.info(f"JWT token validated for request {http_method} {path}")
+
+                # Ajouter les infos d'auth dans l'event pour les endpoints
+                event['auth'] = token_info
+
+            except TokenValidationError as e:
+                # Token invalide ou manquant -> 401 Unauthorized
+                logger.warning(f"JWT validation failed: {e}")
+                return {
+                    'statusCode': 401,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'WWW-Authenticate': 'Bearer realm="ENGIE Bamboo-PTC API"',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps({
+                        'error': {
+                            'code': 401,
+                            'message': 'Unauthorized',
+                            'details': [
+                                {
+                                    'field': 'Authorization',
+                                    'error': str(e)
+                                }
+                            ]
+                        }
+                    })
+                }
+        else:
+            logger.warning("JWT authentication is DISABLED - for development only!")
+
+        # =====================================================================
+        # ROUTING DES ENDPOINTS
+        # =====================================================================
 
         # Router vers le bon endpoint
         # GET /locations
